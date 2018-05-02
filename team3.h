@@ -6,6 +6,8 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 
+#include <pwd.h>		//to get password without displaying it while typing it
+
 #include<sys/signal.h>
 #include<sys/wait.h>
 #include <sys/types.h>
@@ -15,6 +17,9 @@
 #include<string.h>
 #include<stdbool.h>
 #include <stdio.h>    //printf()
+#include<limits.h>
+#include <time.h>
+#include <stdio_ext.h>
 
 #ifndef	INADDR_NONE
 #define	INADDR_NONE	0xffffffff
@@ -33,146 +38,18 @@
 
 extern int errno;
 
-/*------------------------------------------------------------------------
- * connectsock - allocate & connect a socket using TCP or UDP
- *------------------------------------------------------------------------
- */
-int
-connectsock(const char *host, const char *service, const char *transport )
-/*
- * Arguments:
- *      host      - name of host to which connection is desired
- *      service   - service associated with the desired port
- *      transport - name of transport protocol to use ("tcp" or "udp")
- */
+void handleErrors(void)
 {
-	struct hostent	*phe;	/* pointer to host information entry	*/
-	struct servent	*pse;	/* pointer to service information entry	*/
-	struct protoent *ppe;	/* pointer to protocol information entry*/
-	struct sockaddr_in sin;	/* an Internet endpoint address		*/
-	int	s, type;	/* socket descriptor and socket type	*/
+    unsigned long errCode;
 
-/*
-
- // filling socket address data structure
-
-	struct sockaddr_in server_address;
-
-	server_address.sin_family=AF_INET;
-	server_address.sin_port=htons(portnumber);
-	server_address.sin_addr.s_addr=htonl(INADDR_ANY); //any local ip address of local machine
-
-
-
-
-*/
-	memset(&sin, 0, sizeof(sin));
-	sin.sin_family = AF_INET;
-
-    /* Map service name to port number */
-	if ( pse = getservbyname(service, transport) )
-		sin.sin_port = htons(pse->s_port);
-	else if ((sin.sin_port=htons((unsigned short)atoi(service))) == 0)
-		perror("can't get service");
-
-    /* Map host name to IP address, allowing for dotted decimal */
-	if ( phe = gethostbyname(host) )
-		memcpy(&sin.sin_addr, phe->h_addr, phe->h_length);
-	else if ( (sin.sin_addr.s_addr = inet_addr(host)) == INADDR_NONE )
-		perror("can't get  host entry\n");
-
-    /* Map transport protocol name to protocol number */
-	if ( (ppe = getprotobyname(transport)) == 0)
-		perror("can't get  protocol entry\n");
-
-    /* Use protocol to choose a socket type */
-	if (strcmp(transport, "udp") == 0)
-		type = SOCK_DGRAM;
-	else
-		type = SOCK_STREAM;
-
-    /* Allocate a socket */
-	s = socket(PF_INET, type, ppe->p_proto);
-	if (s < 0)
-		perror("can't create socket\n");
-
-    /* Connect the socket */
-	if (connect(s, (struct sockaddr *)&sin, sizeof(sin)) < 0)
-		perror("can't connect to server \n");
-	return s;
+    printf("An error occurred\n");
+    while(errCode = ERR_get_error())
+    {
+        char *err = ERR_error_string(errCode, NULL);
+        printf("%s\n", err);
+    }
+    abort();
 }
-
-
-int	connectTCP(const char *host, const char *service )
-/*
- * Arguments:
- *      host    - name of host to which connection is desired
- *      service - service associated with the desired port
- */
-{
-	return connectsock( host, service, "tcp");
-
-}
-
-
-int passivesock(const char *service, const char *transport, int qlen){
-/* create a passive socket for use in server */
-	struct servent *pse;	//pointer to service information
-	struct protoent *ppe;	//pointer to protocol information
-	struct sockaddr_in sin;	//structure variable for internet endpoint address
-	int s,type;
-
-	memset(&sin,0,sizeof(sin));
-
-
-	sin.sin_family = AF_INET;
-	sin.sin_addr.s_addr= INADDR_ANY;
-
-
-	/*Map servie name to port number*/
-
-	if(pse = getservbyname(service,transport))
-			sin.sin_port = htons(ntohs((unsigned short)pse->s_port));
-	else if ((sin.sin_port=htons((unsigned short)atoi(service))) == 0)
-			perror("Can't get a service entry\n");
-
-	/*Map protocol name to protocol number*/
-	if((ppe = getprotobyname(transport)) == 0)
-			perror("Can't get a  protocol entry\n");
-
-	/*Use protocol to choose a socket type*/
-
-		if (strcmp(transport,"udp") == 0)
-					type = SOCK_DGRAM;
-		else
-					type = SOCK_STREAM;
-
-		/*Allocate a socket*/
-
-		s= socket(AF_INET, type, 0);
-		if(s<0)
-				perror("Can't create socket: \n");
-
-	  /*Bind the socket*/
-		if(bind(s, (struct sockaddr *)&sin, sizeof(sin)) < 0)
-				perror("Can't bind to port: \n");
-
-		if(type == SOCK_STREAM && listen(s,qlen) < 0)
-					perror("Can't listen on port: \n");
-
-		return s;
-
-
-}
-
-
-int passiveTCP(const char *service, int qlen)
-{
-/* service associated with the desired port */
-return passivesock(service,"tcp",qlen);
-}
-
-
 
 
 int encrypt(unsigned char *plaintext, int plaintext_len, const unsigned char *aad,
@@ -302,15 +179,83 @@ int decrypt(unsigned char *ciphertext, int ciphertext_len, const unsigned char *
     }
 }
 
-void handleErrors(void)
+void gen_username(int user_input, char* string_name)
 {
-    unsigned long errCode;
+ string_name[100]="USR_";
+	    FILE *fptr;
+ 		 char ch[5];
+		int number=0;
+		char *a="PU_";//Patient
+		char *b="DU_";//Doctor
+		char *c="AU_";//Admin	
+		char snum[10];	
+		char NumberToFile[5];
+		char chr[5];	
+		char *filename;			
 
-    printf("An error occurred\n");
-    while(errCode = ERR_get_error())
-    {
-        char *err = ERR_error_string(errCode, NULL);
-        printf("%s\n", err);
-    }
-    abort();
+		switch(user_input)
+		{
+				case 2: strcpy(string_name,a);
+						filename="p.txt";	
+						break;
+				case 4: strcpy(string_name,b);
+						filename="d.txt";	
+						break;
+				case 6: strcpy(string_name,c);
+						filename="a.txt";		
+						break;
+				default:strcpy(string_name,a);
+					filename="p.txt";
+					break;
+
+		}
+
+		//sprintf(filename, "%c.txt");
+   		fptr=fopen(filename,"r");
+		    if (fptr == NULL)
+			{
+				printf("Cannot open file \n");
+				exit(0);
+			}
+			fgets(ch,sizeof(ch),fptr);
+			fclose(fptr);
+		number=atoi(ch);
+		number=number+1;	
+		fptr=fopen(filename,"w");//Opening file again to update the value.
+		    if (fptr == NULL)
+			{
+				printf("Cannot open file \n");
+				exit(0);
+			}
+			snprintf(chr, sizeof(chr),"%04d",number);		
+			fprintf(fptr,"%s",chr);
+			fclose(fptr);
+		snprintf(snum, sizeof(snum),"%s",ch);//IMPORTANT		
+		strcat(string_name,snum);	
+}
+
+int captcha( )
+{
+int size=7;
+
+char str[8],buffer[8];
+     srand(time(0));
+    const char charset[] = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    if (size) {
+            --size;
+            for (size_t n = 0; n < size; n++) {
+                        int key = rand() % (int) (sizeof charset - 1);
+                        str[n] = charset[key];
+                    }
+            str[size] = '\0';
+        }
+    
+printf("Enter captcha : %s\n", str );
+__fpurge(stdin);         //function to clear I/O buffer
+fgets(buffer,7,stdin);
+buffer[strcspn(buffer, "\n")] = 0;
+if (! strcmp(str,buffer))
+    return 0; 
+else
+    return 1;
 }

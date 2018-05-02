@@ -1,7 +1,10 @@
 /* client.c */
-/* default ip: INADDR_ANY(localhost)    port number: 3000 */
+/* default ip: ipv6 localhost    port number: 3000 */
 #include "team3.h"
 #define BLEN 1024
+
+
+void  __fpurge(FILE *stream);
 
 static const unsigned char key[] = "01234567890123456789012345678901";  //256 bit key
 static const unsigned char iv[] = "0123456789012345"; //128 bit IV
@@ -27,30 +30,68 @@ static inline void recv_from(int my_socket, char* buffer)
     /* Decrypt the ciphertext */
     decryptedtext_len = decrypt(ciphertext, strlen(ciphertext), aad, strlen(aad), tag, key, iv, buffer);//receiving response from the server
 }
+int my_socket;
+void sigintHandler(int sig_num)
+{
 
+    printf("\n terminated using Ctrl+C \n");
+    fflush(stdout);
+	close(my_socket);
+	exit(1);
+}
 int main( int argc , char* argv[]  )
 {
-    char *display;
-    char *host="localhost";
-      char service[6]= "3000";    //default port number
-    int my_socket;
-    char buffer[BLEN];
-      int user_option=0;
-      my_socket=connectTCP( host, service);
-      int logged=0;  //to check if user logged in or not
+signal(SIGINT, sigintHandler);
+int  portno, n;
+struct sockaddr_in6 serv_addr;
+struct hostent *server;
 
+portno = 3000;
+
+//Sockets Layer Call: socket()
+my_socket = socket(AF_INET6, SOCK_STREAM, 0);
+if (my_socket < 0)
+    perror("ERROR opening socket");
+
+
+server = gethostbyname2("::1",AF_INET6);
+
+
+if (server == NULL) {
+    fprintf(stderr, "ERROR, no such host\n");
+    exit(0);
+}
+
+memset((char *) &serv_addr, 0, sizeof(serv_addr));
+serv_addr.sin6_flowinfo = 0;
+serv_addr.sin6_family = AF_INET6;
+memmove((char *) &serv_addr.sin6_addr.s6_addr, (char *) server->h_addr, server->h_length);
+serv_addr.sin6_port = htons(portno);
+
+//Sockets Layer Call: connect()
+if (connect(my_socket, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0)
+    perror("ERROR connecting");
+
+      int logged=0;  //to check if user logged in or not
+      char buffer[BLEN];
+        int user_option=0;
+        char *display;
       OpenSSL_add_all_algorithms();
       ERR_load_crypto_strings();
 
 
-start:
+start:  user_option=0;
 
-            printf("enter 1 to patient login 2 to patient signup\n");
+            printf("\nenter 1 to patient login 2 to patient signup\n");
             printf("enter 3 to doctor  login 4 to doctor  signup\n");
             printf("enter 5 to company login 6 to company signup\n");
             printf("enter 7 to exit, signup if you are new user \n");
-
-      scanf("%d",&user_option);
+            __fpurge(stdin);
+      if( scanf("%d",&user_option) !=1)
+            {
+                printf("enter only given options\n");
+                goto start;
+            }
     sprintf(buffer,"%d",user_option);
       bzero(ciphertext,BLEN);
     /* Encrypt the plaintext */
@@ -67,11 +108,12 @@ case 3:     bzero(buffer,BLEN);
            send_to(my_socket,buffer);
 
     bzero(buffer,BLEN);
-    printf("enter password: ");
-    __fpurge(stdin);         //function to clear I/O buffer
-    fgets(buffer,BLEN,stdin);
-    buffer[strcspn(buffer, "\n")] = 0;
+  	strncpy(buffer, getpass("Password: "), 80);
     send_to(my_socket,buffer);    //sending number to server
+while(    captcha())
+{
+printf("please enter correct captcha\n");
+}
 
     bzero(buffer,BLEN);
     recv_from(my_socket, buffer);
@@ -97,12 +139,12 @@ case 1:       bzero(buffer,BLEN);
            send_to(my_socket,buffer);
 
     bzero(buffer,BLEN);
-    printf("enter password: ");
-    __fpurge(stdin);         //function to clear I/O buffer
-    fgets(buffer,BLEN,stdin);
-    buffer[strcspn(buffer, "\n")] = 0;
-
+strncpy(buffer, getpass("Password: "), 80);
     send_to(my_socket,buffer);    //sending number to server
+while( captcha())
+{
+printf("please enter correct captcha\n");
+}
 
     bzero(buffer,BLEN);
     recv_from(my_socket, buffer);
@@ -118,10 +160,10 @@ case 1:       bzero(buffer,BLEN);
     break;
 
 case 4:
-    bzero(buffer,BLEN);
-    printf("enter doctor username: ");
-    __fpurge(stdin);
-    fgets(buffer,BLEN,stdin);
+
+   bzero(buffer,BLEN);
+	gen_username( user_option,  buffer);	//automatically generate username for doctor
+    printf("your username: |%s|\n",buffer);
     buffer[strcspn(buffer, "\n")] = 0;
     send_to(my_socket,buffer);        //sending username to server
 
@@ -189,10 +231,11 @@ case 4:
     break;
 
 case 6:
-case 2: bzero(buffer,BLEN);
-    printf("enter username: ");
-    __fpurge(stdin);
-    fgets(buffer,BLEN,stdin);
+case 2:
+bzero(buffer,BLEN);
+gen_username( user_option,  buffer);
+
+    printf("your username: |%s|\n",buffer);
     buffer[strcspn(buffer, "\n")] = 0;
     send_to(my_socket,buffer);        //sending username to server
 
@@ -269,24 +312,66 @@ case 2: bzero(buffer,BLEN);
 case 7: goto end;
 
 default: printf("invalid input\n");
-     goto start;
+            goto start;
 }//switch
 
 while(logged==1)
 {
 select:
-    printf("enter 11 to view personal details\n");
+    printf("\nenter 11 to view personal details\n");
     printf("enter 12 to book appointment\n");
     printf("enter 13 to view medical history\n");
+    printf("enter 15 to cancel appointment\n");
     printf("enter 14 to logout\n");
 
 user_option=0;
 bzero(buffer,BLEN);
-scanf("%d",&user_option);
+if( scanf("%d",&user_option) !=1)
+{
+    printf("\n\n enter only integers from given options \n\n");
+    goto select;
+}
 sprintf(buffer,"%d",user_option);
     send_to(my_socket,buffer);
 
 switch(user_option){
+case 15:   printf("your upcoming appointments\n");   //to view medical history
+stayinloop:    bzero(buffer,BLEN);
+            recv_from(my_socket,buffer);
+            if( strcmp(buffer,"cmd_end") != 0 )
+            {
+                display=(char *)malloc(sizeof(char)*32);
+
+                strncpy(display,buffer,32);
+                printf("patient name: %-32s\n",display);
+                strncpy(display,buffer+32,32);
+                printf("doctor name : %-32s\n",display);
+                strncpy(display,buffer+64,32);
+                printf("date        : %-32s\n",display);
+                strncpy(display,buffer+96,32);
+                printf("time        : %-32s\n",display);
+                strncpy(display,buffer+128,32);
+                printf("location    : %-32s\n",display);
+                strncpy(display,buffer+160,32);
+                printf("service     : %-32s\n",display);
+                strncpy(display,buffer+192,32);
+                printf("comments    : %-32s\n",display);
+                bzero(display,sizeof(display));
+                strncpy(display,buffer+224,32);
+                printf("id          : %-32s\n",display);
+                free(display);
+                goto stayinloop;
+            }
+    ha:     printf("\n enter id of appointment you want to cancel \n");
+            if( scanf("%d",&user_option) !=1)
+            {
+                printf("\n\n enter only integers from given options \n\n");
+                goto ha;
+            }
+            sprintf(buffer,"%d",user_option);
+                send_to(my_socket,buffer);
+                printf("id |%s|\n",buffer);
+            break;
 case 11: bzero(buffer,BLEN);
     recv_from(my_socket,buffer);
 
@@ -307,7 +392,7 @@ case 11: bzero(buffer,BLEN);
 
     goto select;
     break;
-case 12:printf("Available Appointments\n");
+case 12:printf("\nAvailable Appointments\n\n");
 stayinloop1:    bzero(buffer,BLEN);
     recv_from(my_socket,buffer);
 if( strcmp(buffer,"cmd_end") != 0 )
@@ -315,7 +400,7 @@ if( strcmp(buffer,"cmd_end") != 0 )
     display=(char *)malloc(sizeof(char)*32);
 
 strncpy(display,buffer,32);
-    printf("Doctor name: %-32s\n",display);
+    printf("\nDoctor name: %-32s\n",display);
 strncpy(display,buffer+32,32);
     printf("date       : %-32s\n",display);
 strncpy(display,buffer+64,32);
@@ -334,10 +419,17 @@ strncpy(display,buffer+160,32);
 else
 {
     bzero(buffer,BLEN);
-               printf("enter id: ");
+        s1:       printf("\nenter id: ");
                __fpurge(stdin);         //function to clear I/O buffer
-               fgets(buffer,BLEN,stdin);
+               if( scanf("%d",&user_option) !=1)
+               {
+                   printf("enter integer from given options\n");
+                   goto s1;
+               }
+               sprintf(buffer,"%d",user_option);
+               printf("buffer: |%s|\n",buffer);
                buffer[strcspn(buffer, "\n")] = 0;
+
                send_to(my_socket,buffer);   //send id for booking appointment
                bzero(buffer,BLEN);
                recv_from(my_socket,buffer);
@@ -348,14 +440,14 @@ else
 
 case 13:
         printf("medical history\n");   //to view medical history
-        stayinloop:    bzero(buffer,BLEN);
+        stayinloop111:    bzero(buffer,BLEN);
                     recv_from(my_socket,buffer);
                     if( strcmp(buffer,"cmd_end") != 0 )
                     {
                         display=(char *)malloc(sizeof(char)*32);
 
                         strncpy(display,buffer,32);
-                        printf("patient name: %-32s\n",display);
+                        printf("\npatient name: %-32s\n",display);
                         strncpy(display,buffer+32,32);
                         printf("doctor name : %-32s\n",display);
                         strncpy(display,buffer+64,32);
@@ -367,9 +459,9 @@ case 13:
                         strncpy(display,buffer+160,32);
                         printf("service     : %-32s\n",display);
                         strncpy(display,buffer+192,32);
-                        printf("comments    : %-32s\n",display);
+                        printf("comments    : %-32s\n\n",display);
                         free(display);
-                        goto stayinloop;
+                        goto stayinloop111;
                     }
                     else
                         goto select;
@@ -386,14 +478,18 @@ default: goto select;
 while(logged==2)
 {
     select2:
-        printf("enter 20 to view personal details\n");
+        printf("\nenter 20 to view personal details\n");
         printf("enter 21 to register\n");
         printf("enter 22 to view medical history\n");
         printf("enter 23 to logout\n");
 
     user_option=0;
     bzero(buffer,BLEN);
-    scanf("%d",&user_option);
+    if( scanf("%d",&user_option) !=1)
+    {
+        printf("\n\n enter only integers from given options \n\n");
+        goto select2;
+    }
     sprintf(buffer,"%d",user_option);
         send_to(my_socket,buffer);
 switch(user_option)

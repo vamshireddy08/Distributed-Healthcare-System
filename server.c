@@ -64,34 +64,62 @@ else
 
 int main( int argc , char* argv[ ] ){
 
-int server_socket;    //integers to hold client and server socket descriptor values
-char service[6]="3000";
+int sockfd, portno=3000;
+struct sockaddr_in6 serv_addr,cli_addr ;
+socklen_t clilen;
+char client_addr_ipv6[100];
+clilen = sizeof(cli_addr);
 
-struct sockaddr_in client_Addr;
-int addr_len = sizeof(client_Addr);
 
-server_socket=passiveTCP(service,qlen);
+//Sockets Layer Call: socket()
+sockfd = socket(AF_INET6, SOCK_STREAM, 0);
+if (sockfd < 0)
+    error("ERROR opening socket");
+
+bzero((char *) &serv_addr, sizeof(serv_addr));
+
+serv_addr.sin6_flowinfo = 0;
+serv_addr.sin6_family = AF_INET6;
+serv_addr.sin6_addr = in6addr_any;
+serv_addr.sin6_port = htons(portno);
+int on=1;
+int r= setsockopt(sockfd, IPPROTO_IPV6, IPV6_V6ONLY, &on, sizeof(on));
+if (r)
+{
+    printf("ipv6 error at line 89\n");
+    exit(1);
+}
+//Sockets Layer Call: bind()
+if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0)
+    error("ERROR on binding");
+
+//Sockets Layer Call: listen()
+listen(sockfd, 5);
+
 
 printf("TCP multithread server is running\n");
 pthread_t thread1;
 int client_socket;
 while (1)
     {
-        client_socket = accept(server_socket, (struct sockaddr*)&client_Addr, (socklen_t*)&addr_len);
+        client_socket = accept(sockfd,    (struct sockaddr *) &cli_addr, &clilen);
         if (client_socket < 0)
         {
             if (errno == EINTR)
             perror("accept");
         continue;
         }
-    	printf("IP is %s\n", inet_ntoa(client_Addr.sin_addr));
-        printf("Port is %d\n", htons(client_Addr.sin_port));
+        inet_ntop(AF_INET6, &(cli_addr.sin6_addr),client_addr_ipv6, 100);
+
+printf("Incoming connection from client having IPv6 address: |%s|\n",client_addr_ipv6);
+printf("Client port is %d\n", ntohs(cli_addr.sin6_port));
+
     if (pthread_create( &thread1 , NULL ,(void *) &TCP_thread,(void *) client_socket) < 0)    //don't use &client socket it will not run properly
             perror("pthread_create");
     }
 
 printf("closing main\n");
-close(server_socket);    //close the socket connection, removes socket descriptor from table.
+close(sockfd);    //close the socket connection, removes socket descriptor from table.
 return 0;
 }
 
@@ -459,21 +487,75 @@ free(address);
 free(gmail);
 goto main;
 break;
-
-case 7: goto end;
-default: printf("wrong input\n");//send(client_socket,"wrong input",BLEN,0);
-	continue;
+default:
+        goto end;
 }//end of switch
 }//while logged=0
 
 while(logged==1)
 {
 half:	bzero(buffer,BLEN);
-   	recv_from(client_socket, buffer);
+   	    recv_from(client_socket, buffer);
 
 	int user_option=atoi(buffer);
 switch(user_option)
 {
+case 15:
+        bzero(buffer,BLEN);
+	       strcpy(query,"SELECT p_name,d_name,date,time,location,service,comments,id FROM t3 WHERE p_username=\'");
+	          strncat(query,username,strlen(username));
+	             strcat(query,"\'");
+		if (mysql_query(connection, query)) 	//function to request data from db
+                {sprintf(buffer,"MYSQL ERROR: %s\n", mysql_error(connection));
+                    printf("MYSQL ERROR: %s\n", mysql_error(connection));
+                }
+
+	               result=mysql_store_result(connection);	//variable to store results and display
+	unsigned int  col=mysql_num_fields(result);
+
+while(row = mysql_fetch_row(result))	//iterates from 1st to last row
+{
+	for(i=0;i<col;i++)
+	{
+	sprintf(buffer+(32*i),"%-32s",row[i]);
+	}
+send_to(client_socket,buffer);
+}
+bzero(buffer,BLEN);
+strcpy(buffer,"cmd_end");
+send_to(client_socket,buffer);
+	mysql_free_result(result);
+    bzero(buffer,BLEN);
+   	recv_from(client_socket, buffer);
+    bzero(query,BLEN);
+    sprintf(query," INSERT INTO t2 (id,d_username,d_name,date,time,location,service) SELECT id,d_username,d_name,date,time,location,service FROM t3 WHERE id=%s",buffer);
+
+    if (mysql_query(connection, query)) 	//function to request data from db
+                {
+                    printf("MYSQL ERROR: %s\n", mysql_error(connection));
+                }
+                result=mysql_store_result(connection);
+                mysql_free_result(result);
+    bzero(query,BLEN);
+    sprintf(query," DELETE FROM t3 WHERE id=%s",buffer);
+    if (mysql_query(connection, query)) 	//function to request data from db
+                            {
+                                printf("MYSQL ERROR: %s\n", mysql_error(connection));
+                            }
+                            result=mysql_store_result(connection);
+                            mysql_free_result(result);
+    bzero(query,BLEN);
+    sprintf(query," UPDATE t2 SET p_username='NULL' WHERE id=%s",buffer);
+    if (mysql_query(connection, query)) 	//function to request data from db
+                            {
+                                printf("MYSQL ERROR: %s\n", mysql_error(connection));
+                            }
+                            result=mysql_store_result(connection);
+                            mysql_free_result(result);
+
+// sql queries for deleting appointments
+    goto half;
+
 case 14: printf("logging out\n");
 	logged=0;
 	goto main;
@@ -488,7 +570,7 @@ case 11: bzero(buffer,BLEN);
                 }
 
 	result=mysql_store_result(connection);	//variable to store results and display
-	unsigned int col=mysql_num_fields(result);
+	/*unsigned int*/ col=mysql_num_fields(result);
 
 while(row = mysql_fetch_row(result))	//iterates from 1st to last row
 {
@@ -512,7 +594,7 @@ case 13: bzero(buffer,BLEN);
 
 	result=mysql_store_result(connection);	//variable to store results and display
 	/*unsigned int */ col=mysql_num_fields(result);
-
+    if(result!=NULL){
 while(row = mysql_fetch_row(result))	//iterates from 1st to last row
 {
 	for(i=0;i<col;i++)
@@ -524,6 +606,9 @@ send_to(client_socket,buffer);
 bzero(buffer,BLEN);
 strcpy(buffer,"cmd_end");
 send_to(client_socket,buffer);
+}
+else
+    send_to(client_socket,"no result");
 	mysql_free_result(result);
 
 	goto half;
@@ -553,9 +638,10 @@ bzero(buffer,BLEN);
     strcpy(buffer,"cmd_end");
     send_to(client_socket,buffer);
 	mysql_free_result(result);
-
+    bzero(buffer,BLEN);
     recv_from(client_socket, buffer);
     int id=atoi(buffer);
+
     bzero(query,BLEN);
     sprintf(query,"UPDATE t2 SET p_username=\'%s\' WHERE id=%d",username,id);
 
@@ -567,7 +653,7 @@ bzero(buffer,BLEN);
     else
     {
         bzero(query,BLEN);
-    sprintf(query,"INSERT INTO t3 SELECT t1.p_username,t2.d_username,t1.first_name,t2.d_name,t2.date,t2.time,t2.location,t2.service,t2.location FROM t1 INNER JOIN t2 ON t1.p_username=t2.p_username WHERE t2.id=%d",id);
+    sprintf(query,"INSERT INTO t3 SELECT t2.id,t1.p_username,t2.d_username,t1.first_name,t2.d_name,t2.date,t2.time,t2.location,t2.service,t2.location FROM t1 INNER JOIN t2 ON t1.p_username=t2.p_username WHERE t2.id=%d",id);
         if (mysql_query(connection, query)) 	// UPDATE appointments(t3) table with booked appointment
             {
                 sprintf(buffer,"MYSQL ERROR: %s\n", mysql_error(connection));
@@ -589,30 +675,17 @@ bzero(buffer,BLEN);
         send_to(client_socket,buffer);
 	goto half;
 
-    default: printf("close connection\n");
-		goto half;
+    default: goto end;
 }//switch end
-
-
-
 
 }//while logged=1
 
-
-
-
-
-
-
-
 while(logged==2)
 {
-    printf("im in loop 2\n");
     d_half:	bzero(buffer,BLEN);
    	    recv_from(client_socket, buffer);
 
 	       int user_option=atoi(buffer);
-           printf("user option:%d\n",user_option);
            switch(user_option)
            {
                case 23:    printf("logging out\n");
@@ -629,7 +702,7 @@ while(logged==2)
                 }
 
 	result=mysql_store_result(connection);	//variable to store results and display
-	unsigned int col=mysql_num_fields(result);
+	unsigned int  col=mysql_num_fields(result);
 
 while(row = mysql_fetch_row(result))	//iterates from 1st to last row
 {
@@ -650,10 +723,8 @@ case 22: bzero(buffer,BLEN);
                 {sprintf(buffer,"MYSQL ERROR: %s\n", mysql_error(connection));
                     printf("MYSQL ERROR: %s\n", mysql_error(connection));
                 }
-
 	result=mysql_store_result(connection);	//variable to store results and display
 	/*unsigned int */ col=mysql_num_fields(result);
-
 while(row = mysql_fetch_row(result))	//iterates from 1st to last row
 {
 	for(i=0;i<col;i++)
@@ -699,21 +770,25 @@ else
         strcpy(buffer,"inserted successful");
     mysql_free_result(result);
 
+bzero(query,BLEN);
+sprintf(query," UPDATE t2 INNER JOIN t4 ON t2.d_username=t4.d_username SET t2.d_name=t4.d_name,t2.location=t4.d_address,t2.service=t4.specality,t2.network=t4.network1 WHERE t2.d_username='%s'",username);
+
+if (mysql_query(connection, query)) 	//function to request data from db
+            {
+                printf("MYSQL ERROR: %s\n", mysql_error(connection));
+            }
+
+
+	result=mysql_store_result(connection);	//variable to store results and display
+    mysql_free_result(result);
+
     send_to(client_socket,buffer);
 	goto d_half;
 
     default: printf(" wrong option\n");
-		goto d_half;
+		goto end;
 }//switch end
-
-
-
-
 }//while logged=2
-
-
-
-
 
 end:    printf("connection closed\n");
 	close(client_socket);
