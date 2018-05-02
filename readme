@@ -8,12 +8,6 @@ compling mysql api in c:
 
 gcc mysql.c -o mysql `mysql_config --cflags --libs`
 
-gcc `pkg-config --cflags gtk+-3.0` -o gtk_example gtk_example.c `pkg-config --libs gtk+-3.0`
-
-gcc mynewaes.c -o mynewaes -lcrypto
-gcc hash.c -o hash -lcrypto
-gcc rsa.c -o rsa -lcrypto
-
 gcc server.c -o server -pthread
 
 First, don't use AES_encrypt and AES_decrypt. They are low level and harder to use. Additionally, it's a software-only routine, and it will never use hardware acceleration, like AES-NI. Finally, its subject to endianess issues on some obscure platforms.
@@ -125,17 +119,6 @@ ORDER BY ordinal_position;
  my_ulonglong mysql_num_rows(MYSQL_RES *result)
 Returns the number of rows in the result set. 
 
-use relational database 
-patient
-provider
-insurance company
-all
-
-use sprintf and snprintf
-snprintf(char *str, size_t size, const char *format, ...);
-sprintf(buffer, "Sum of %d and %d is %d", a, b, c);
-strncpy(dest, src + beginIndex, endIndex - beginIndex);
- void *memcpy(void *dest, const void *src, size_t n);
 
 
 
@@ -145,12 +128,12 @@ use select query with where username='current user'
 SELECT COUNT(DISTINCT Country) FROM Customers;
 use this command to tell the user how many rows server is going to send.
 
-command(16 bits) data(16 bits) 
+
 if user requests data from database, in data server sends no.of times cilent has to run recv function.
 
 row size is mentioned in command.
 
-command: cmd1024 ==> 
+ 
 
 
 to view tables and table size in a database
@@ -180,7 +163,6 @@ http://thinkdiff.net/mysql/encrypt-mysql-data-using-aes-techniques/
 INSERT INTO users (username, password) VALUES ('root', AES_ENCRYPT('somepassword','vamshi08'));
 SELECT AES_DECRYPT(password, 'vamshi08') FROM users WHERE username = 'root';
 
-How can I verify I'm using SSL to connect to mysql?
 
 
 creating a new user in database:
@@ -194,26 +176,12 @@ https://www.digitalocean.com/community/tutorials/how-to-create-a-new-user-and-gr
 
 
 
-user1:
-vamshi08
-cmpe207
-vamshi reddy
-verama reddy
-1996-08-08
-male
-6692140080
-3346 woodside lane,san jose
-vamshi.verama@gmail.com
-
-user2:
-
-
-user3:
 
 
 
-
-Two advantages of encrypting data stored in a database are: 1) Encryption ensures the privacy of the data stored in the database 2) If the data is intercepted by unauthorized users, encryption prevents the user from reading
+Two advantages of encrypting data stored in a database are: 
+1) Encryption ensures the privacy of the data stored in the database 
+2) If the data is intercepted by unauthorized users, encryption prevents the user from reading
 
 client-server encryption:
 data privacy and authentication
